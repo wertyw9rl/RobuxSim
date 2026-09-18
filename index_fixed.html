@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RobuxSim</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#0b0d10;color:#fff;min-height:100vh}
+.wrap{max-width:480px;margin:auto;padding:14px 16px 40px}
+.brand{text-align:center;font-size:30px;font-weight:800;margin:8px 0 6px;transform:translateY(-8px)}
+.sub{text-align:center;color:#9ca3af;font-size:13px;margin-bottom:20px}
+.card{background:#13161b;border:1px solid #292f38;border-radius:18px;padding:18px;box-shadow:0 12px 30px #0005}
+label{display:block;font-size:13px;color:#b8c0cc;margin-bottom:8px}
+input{width:100%;padding:15px;border-radius:12px;border:1px solid #39414d;background:#0c0f13;color:#fff;font-size:16px;outline:none}
+button{width:100%;margin-top:12px;padding:15px;border:0;border-radius:12px;background:#27c466;color:#07140c;font-size:16px;font-weight:800}
+button:disabled{opacity:.55}
+.profile{display:none;text-align:center;margin-top:20px}
+.avatar{width:110px;height:110px;border-radius:50%;object-fit:cover;border:3px solid #343b46;background:#0c0f13}
+.name{font-size:21px;font-weight:800;margin:10px 0 4px}
+.id{color:#8e98a6;font-size:12px}
+.progress{display:none;margin-top:20px}
+.bar{height:9px;background:#252b34;border-radius:99px;overflow:hidden}
+.fill{width:0;height:100%;background:#27c466;transition:width .5s}
+.status{text-align:center;color:#c2c9d2;font-size:13px;margin:10px}
+.result{display:none;margin-top:18px;text-align:center;background:#101318;border:1px solid #303640;border-radius:14px;padding:18px}
+.amount{font-size:34px;font-weight:900}
+.err{display:none;color:#ff8e8e;font-size:13px;margin-top:10px;text-align:center}
+.notice{text-align:center;color:#7f8997;font-size:11px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">💎 RobuxSim</div>
+  <div class="sub">Roblox profil simülasyonu</div>
+
+  <div class="card">
+    <label for="username">Roblox kullanıcı adı</label>
+    <input id="username" placeholder="Örn. Builderman" autocomplete="off">
+    <button id="search">Profili Bul</button>
+
+    <div id="err" class="err"></div>
+
+    <div id="profile" class="profile">
+      <img id="avatar" class="avatar" alt="Roblox avatar">
+      <div id="name" class="name"></div>
+      <div id="uid" class="id"></div>
+    </div>
+
+    <div id="progress" class="progress">
+      <div class="status" id="status">Simülasyon hazırlanıyor...</div>
+      <div class="bar"><div id="fill" class="fill"></div></div>
+    </div>
+
+    <div id="result" class="result">
+      <div id="amount" class="amount">0 R$</div>
+    </div>
+
+    <div class="notice">Bu sayfa yalnızca eğlence amaçlı bir simülasyondur; gerçek Robux vermez.</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+async function findUser(){
+  const username = $("username").value.trim();
+
+  $("err").style.display = "none";
+  $("profile").style.display = "none";
+  $("progress").style.display = "none";
+  $("result").style.display = "none";
+  $("fill").style.width = "0%";
+
+  if(!username){
+    $("err").textContent = "Lütfen bir Roblox kullanıcı adı yaz.";
+    $("err").style.display = "block";
+    return;
+  }
+
+  $("search").disabled = true;
+  $("search").textContent = "Aranıyor...";
+
+  try{
+    const r = await fetch("https://users.roblox.com/v1/usernames/users", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        usernames:[username],
+        excludeBannedUsers:false
+      })
+    });
+
+    if(!r.ok) throw new Error("network");
+
+    const d = await r.json();
+
+    if(!d.data || !d.data.length) throw new Error("notfound");
+
+    const u = d.data[0];
+
+    $("name").textContent =
+      u.displayName && u.displayName !== u.name
+      ? `${u.displayName} (@${u.name})`
+      : `@${u.name}`;
+
+    $("uid").textContent = `User ID: ${u.id}`;
+
+    const t = await fetch(
+      `https://thumbnails.roblox.com/v1/users/avatar?userIds=${u.id}&size=420x420&format=Png&isCircular=false`
+    );
+
+    if(t.ok){
+      const td = await t.json();
+      const imageUrl = td.data?.[0]?.imageUrl;
+      if(imageUrl) $("avatar").src = imageUrl;
+    }
+
+    $("profile").style.display = "block";
+    $("progress").style.display = "block";
+
+    let p = 0;
+    let i = 0;
+    const messages = [
+      "Profil doğrulanıyor...",
+      "Simülasyon hazırlanıyor...",
+      "Robux miktarı hesaplanıyor...",
+      "Sonuç oluşturuluyor..."
+    ];
+
+    const timer = setInterval(() => {
+      p = Math.min(100, p + Math.floor(Math.random()*18) + 9);
+      $("fill").style.width = p + "%";
+      $("status").textContent = messages[Math.min(i++, messages.length-1)];
+
+      if(p >= 100){
+        clearInterval(timer);
+        $("result").style.display = "block";
+        $("amount").textContent =
+          (Math.floor(Math.random()*9001)+1000).toLocaleString("tr-TR") + " R$";
+      }
+    }, 550);
+
+  }catch(e){
+    $("err").textContent =
+      e.message === "notfound"
+      ? "Bu kullanıcı adıyla bir Roblox hesabı bulunamadı."
+      : "Kullanıcı aranırken bir hata oluştu. Tekrar deneyin.";
+    $("err").style.display = "block";
+  }finally{
+    $("search").disabled = false;
+    $("search").textContent = "Profili Bul";
+  }
+}
+
+$("search").addEventListener("click", findUser);
+
+$("username").addEventListener("keydown", e => {
+  if(e.key === "Enter") findUser();
+});
+</script>
+</body>
+</html>
